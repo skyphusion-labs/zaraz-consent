@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: syntax
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y php-cli
+          php -l zaraz-consent.php
+          php -l tests/cookie-test.php
+          python3 -m py_compile iac/sync_consent.py tests/test_sync.py
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: contract
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y php-cli
+          bash tests/contract.sh

@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "companyName": "Example",
+  "companyEmail": "privacy@example.com",
+  "companyStreetAddress": "",
+  "defaultLanguage": "en",
+  "cookieName": "cf_consent",
+  "hideModal": false,
+  "tcfCompliant": false,
+  "consentModalIntroHTML": "<p>Optional tools stay off until you choose. The cart and the security check do not use this choice.</p>",
+  "purposes": {
+    "analytics": {
+      "name": "Analytics",
+      "description": "Measure how the site is used."
+    }
+  }
+}
