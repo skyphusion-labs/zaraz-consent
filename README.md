@@ -32,9 +32,9 @@ Zaraz does not list a purpose that has no tool assigned. Leave the map empty unt
 
 `companyStreetAddress` in the example is empty. Put an address there only when you have one. The intro HTML is a description of the choice, not a privacy policy. Replace it with the wording you actually use, and point it at your privacy page.
 
+Set `CLOUDFLARE_API_TOKEN` and `ZONE_ID` in the environment, then run:
+
 ```
-export ZONE_ID=your_zone_id
-export CLOUDFLARE_API_TOKEN=your_token
 python3 iac/sync_consent.py iac/consent.json iac/tool-purposes.json
 ```
 
