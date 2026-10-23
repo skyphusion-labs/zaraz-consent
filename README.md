@@ -74,7 +74,7 @@ That default makes the dangerous state quiet. Enable consent over unassigned too
 {}
 ```
 
-The empty default is deliberate. It stops a sync from attaching Google, Meta or anything else. The operational meaning is easy to miss. **Run a sync against this file as shipped, and you enable consent and gate nothing.** Add the tool to gate it:
+The empty default is deliberate. It stops a sync from attaching Google, Meta or anything else. **A sync refuses to enable consent over an empty map.** That combination would show a modal and gate nothing. Add the tool to gate it:
 
 ```json
 {
@@ -98,7 +98,9 @@ cp zaraz-consent.php wp-content/mu-plugins/zaraz-consent.php
 
 There is no activation step and no settings row. WordPress loads `mu-plugins` on its own.
 
-**One more prerequisite is easy to miss.** The plugin emits an inline `<script>`. It therefore needs a Content Security Policy that allows `unsafe-inline` in `script-src`. A nonce-based policy blocks the script. The code that un-hides the button never runs. The button then disappears without a sign. The page renders normally and reports no error. Harden your policy, and you remove your own consent withdrawal control. Nothing tells you. Tracked as #2.
+**Check your Content Security Policy.** The plugin emits an inline `<script>`. WordPress builds that tag with `wp_get_inline_script_tag()`. That helper runs the attributes through the `wp_inline_script_attributes` filter. Add your nonce in that filter and the tag carries it. The plugin then works under a nonce-based policy as well as under `unsafe-inline`.
+
+On WordPress older than 5.7 the helper does not exist. The plugin falls back to a plain tag. That tag needs `unsafe-inline` in `script-src`. Without it the browser blocks the script. The button then stays hidden and nothing reports an error.
 
 ## What Zaraz cannot gate
 
@@ -128,7 +130,7 @@ https://api.cloudflare.com/client/v4/zones/<zone-id>/settings/zaraz/config
 
 Set `CLOUDFLARE_API_TOKEN` and `ZONE_ID` in the environment. `ZONE_ID` is the 32 character zone id. The script reads the token from the environment and never prints it.
 
-The script warns about an empty tool map only after the PUT. So the warning cannot stop you reaching the state described in step 3. Tracked as #1.
+The script refuses to enable consent over an empty tool map. It checks before the PUT, not after it. Pass `--allow-empty-tool-map` to proceed anyway. Use that flag when you stage the purposes first. Zaraz lists no purpose until a tool is assigned to it.
 
 The script sends the whole configuration back, including `zarazVersion`. Nobody has tested whether the API accepts that field or manages it itself. Testing it needs a live write, so this is unverified.
 

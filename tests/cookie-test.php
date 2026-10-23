@@ -59,4 +59,34 @@ if (strpos($script, 'http') !== false) {
     exit(1);
 }
 
+// Issue #2. Without `once`, a second `zarazConsentAPIReady` binds a second
+// click listener and one click toggles the modal twice.
+if (strpos($script, 'once: true') === false) {
+    fwrite(STDERR, "the readiness listener is not one-shot\n");
+    exit(1);
+}
+
+// ISSUE #2, THE TAG. Both branches are driven, because the fallback is the
+// one that runs here by default and a test that only sees the fallback
+// proves nothing about the path real WordPress takes.
+$fallback = zaraz_consent_script_tag();
+expect('fallback opens a script tag', strpos($fallback, '<script>') === 0, true);
+expect('fallback closes it', substr($fallback, -9), '</script>');
+expect('fallback carries the script', strpos($fallback, 'zarazConsentAPIReady') !== false, true);
+
+// DEFINED INSIDE A CONDITIONAL ON PURPOSE. PHP hoists an unconditional
+// top-level function, so a plain declaration here would already exist while
+// the fallback check above ran, and that check would silently exercise the
+// WordPress branch instead. It did exactly that on the first attempt. A
+// conditional block defers the declaration to this point in execution.
+if (true) {
+    function wp_get_inline_script_tag($javascript, $attributes = array()) {
+        return "<script nonce=\"TESTNONCE\">" . $javascript . "</script>";
+    }
+}
+
+$viaWordPress = zaraz_consent_script_tag();
+expect('the helper is used when present', strpos($viaWordPress, 'nonce="TESTNONCE"') !== false, true);
+expect('and it still carries the script', strpos($viaWordPress, 'zarazConsentAPIReady') !== false, true);
+
 echo "cookie_ok\n";
