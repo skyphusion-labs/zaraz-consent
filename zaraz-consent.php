@@ -65,9 +65,32 @@ function zaraz_consent_script() {
     });
   }
   if (window.zaraz && zaraz.consent && zaraz.consent.APIReady) arm();
-  else document.addEventListener("zarazConsentAPIReady", arm);
+  else document.addEventListener("zarazConsentAPIReady", arm, { once: true });
 })();
 JS;
+}
+
+/**
+ * The script, wrapped in a tag by WordPress where that is possible.
+ *
+ * `wp_get_inline_script_tag()` runs the attributes through the
+ * `wp_inline_script_attributes` filter, which is where a site adds its
+ * Content Security Policy nonce. A raw `<script>` cannot be given one, so it
+ * survives only under `unsafe-inline`.
+ *
+ * That mattered more than it looks (issue #2). A site hardening its policy to
+ * nonces would have the script blocked, `arm()` would never run, the
+ * paragraph would stay `hidden`, and the visitor would lose the only control
+ * for changing their mind. The page renders normally and nothing reports an
+ * error, so the operator gets no signal at all.
+ *
+ * The fallback is for WordPress older than 5.7, which has no such helper.
+ */
+function zaraz_consent_script_tag() {
+    if (function_exists('wp_get_inline_script_tag')) {
+        return wp_get_inline_script_tag(zaraz_consent_script());
+    }
+    return '<script>' . zaraz_consent_script() . '</script>';
 }
 
 function zaraz_consent_footer() {
@@ -81,9 +104,8 @@ function zaraz_consent_footer() {
     echo '<p class="zaraz-consent-choices" hidden>';
     echo '<button type="button" id="zaraz-consent-choices">';
     echo esc_html($label);
-    echo '</button></p><script>';
-    echo zaraz_consent_script();
-    echo '</script>';
+    echo '</button></p>';
+    echo zaraz_consent_script_tag();
 }
 
 add_action('wp_footer', 'zaraz_consent_footer', 20);
