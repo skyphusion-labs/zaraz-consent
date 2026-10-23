@@ -134,16 +134,21 @@ The script prints its warning about an empty tool map after the PUT has already 
 
 The Zaraz configuration sits behind its own permission group. A token that reads the zone perfectly well is still refused here.
 
-| Operation | Needs |
-|---|---|
-| `GET .../settings/zaraz/config` | the `Zaraz Read` permission group, zone scoped |
-| `PUT .../settings/zaraz/config` | an edit-level Zaraz permission, zone scoped |
+The permission group list on a Cloudflare account contains three Zaraz groups, all of them zone scoped:
+
+| Group | Use | Status |
+|---|---|---|
+| `Zaraz Read` | `GET .../settings/zaraz/config` | measured working end to end |
+| `Zaraz Edit` | `PUT .../settings/zaraz/config` | named from the permission group list, not verified by a write |
+| `Zaraz Admin` | not needed for a sync | named from the permission group list, not verified by a write |
+
+The list does not say what `Zaraz Admin` grants beyond `Zaraz Edit`, so this file does not guess. A sync reads the configuration and writes it back, so `Zaraz Edit` is the group to reach for and `Zaraz Admin` is wider than the task needs.
 
 **Know the symptom, because it does not look like a scope problem.** Without `Zaraz Read` the GET returns **403** with error code **10000, "Authentication error"**. A wrong path under the same prefix returns 403 as well, so the status alone cannot tell you which you are looking at, and the natural reading is that you typed the URL wrong. Confirmed 2026-10-23: the same token returned 200 on four zones carrying `Zaraz Read` and 403 on four zones without it, while `GET /zones/<zone-id>` returned 200 on all eight.
 
 That last detail is the trap. **Being able to read the zone proves nothing about being able to read its Zaraz configuration.** Do not use a successful zone read as evidence that your token is scoped correctly; test the Zaraz endpoint itself.
 
-The exact label of the edit-level group is not stated here because it was not verified: enumerating the account's permission groups returned 403 with this token, and no write was attempted. Read it from your own account's permission group list before minting a token for a sync.
+Group ids are deliberately left out of this file. An id rots, and a reader will copy one rather than look it up. Read the labels from the permission group list on your own account when you mint the token.
 
 Scope the token to the zones you intend to change and no others.
 
