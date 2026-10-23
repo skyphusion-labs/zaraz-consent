@@ -2,21 +2,21 @@
 
 A WordPress must-use file for [Cloudflare Zaraz](https://developers.cloudflare.com/zaraz/consent-management/) cookie consent.
 
-Cloudflare injects Zaraz on the proxied zone. This file does not ship a banner, a stylesheet, or a script request. The only front-end work is a footer button that stays hidden until `zarazConsentAPIReady`, then sets `zaraz.consent.modal = true`. The consent cookie is read in PHP when something asks.
+Cloudflare injects Zaraz on the proxied zone. This plugin ships no banner, no stylesheet and no script request. It adds one footer button. The button stays hidden until `zarazConsentAPIReady`. The button then sets `zaraz.consent.modal = true`. PHP reads the consent cookie when something asks for it.
 
 ## Read this before you install it
 
-**This file does not gate anything. Installing it does not give your site consent.**
+**This plugin does not gate anything. It does not give your site consent.**
 
-The plugin is a withdrawal control and a cookie reader. It reopens a modal that Zaraz draws, and it reads the choice back in PHP. All of the gating happens on the Cloudflare side, in the Zaraz configuration, and none of it happens here.
+The plugin does two jobs. It reopens a modal that Zaraz draws. It also reads the visitor choice back in PHP. Cloudflare does all the gating, in the Zaraz configuration. The plugin does none of it.
 
-**Zaraz can only gate Zaraz tools.** If a script is enqueued by WordPress, by your theme, or by another plugin, it is not a Zaraz tool, no purpose reaches it, and no amount of correct Cloudflare configuration will stop it. See [What Zaraz cannot gate](#what-zaraz-cannot-gate), which is the section most likely to decide whether this repo solves your problem.
+**Zaraz can gate only Zaraz tools.** WordPress, your theme and other plugins also load scripts. Those are not Zaraz tools. No purpose reaches them. Correct Cloudflare configuration does not stop them. Read [What Zaraz cannot gate](#what-zaraz-cannot-gate) first. That section decides whether this repo solves your problem.
 
-Work through the configuration below before you copy the file. The order matters, and the failure mode for doing it out of order is a button that does nothing with no way to tell why.
+Do the configuration below before you copy the file. The order matters. Out of order, you get a button that does nothing, and no way to tell why.
 
 ## Prerequisite order
 
-Each step depends on the one above it.
+Each step depends on the step above it.
 
 1. Zaraz is enabled on the zone.
 2. Purposes are defined.
@@ -24,28 +24,28 @@ Each step depends on the one above it.
 4. Consent is enabled.
 5. The plugin is installed.
 
-An operator who starts at step 5 sees a hidden button and no modal, and nothing in WordPress explains why. An operator who stops after step 4 gets a consent modal that records a choice and enforces nothing.
+Start at step 5 and you see a hidden button and no modal. WordPress does not explain why. Stop after step 4 and you get a modal that records a choice. That modal enforces nothing.
 
 ### 1. Zaraz must be enabled on the zone
 
-Check it from the edge. This needs no credential:
+Check this from the edge. You need no credential:
 
 ```
 curl -o /dev/null -w "%{http_code}\n" https://<your-zone>/cdn-cgi/zaraz/i.js
 curl -o /dev/null -w "%{http_code}\n" https://<your-zone>/cdn-cgi/trace
 ```
 
-`i.js` returns 200 when Zaraz is on and 404 when it is not. The second request is the control: `/cdn-cgi/trace` returns 200 on any Cloudflare proxied zone, so a 200 there with a 404 on `i.js` means Zaraz specifically is off, and not that the whole `cdn-cgi` namespace is unreachable or the host is wrong.
+`i.js` returns 200 when Zaraz is on. It returns 404 when Zaraz is off. The second request is the control. `/cdn-cgi/trace` returns 200 on any Cloudflare proxied zone. So 200 on `trace` with 404 on `i.js` means Zaraz itself is off. It does not mean the `cdn-cgi` path is unreachable or the host is wrong.
 
-Measured 2026-10-23 on `ggc.sh`, `skyphusion.org` and `vivijure.com`: `i.js` 404 and `trace` 200 on all three. Zaraz is not serving on any of them.
+Measured 2026-10-23 on `ggc.sh`, `skyphusion.org` and `vivijure.com`. All three returned 404 for `i.js` and 200 for `trace`. Zaraz serves on none of them.
 
-A zone can hold a Zaraz configuration and still not serve the script. On those same zones the configuration exists, reports `autoInjectScript: true`, and contains zero tools. Reading the configuration is therefore not a substitute for the check above.
+A zone can hold a Zaraz configuration and still not serve the script. Those three zones hold a configuration. It reports `autoInjectScript: true` and contains zero tools. So reading the configuration does not replace the check above.
 
 ### 2. Purposes
 
-A purpose is the thing a visitor actually agrees to. It is not a tool and not a vendor. It is a category such as analytics or marketing, with an id, a display name and a description, and the modal lists one row per purpose.
+A purpose is what the visitor agrees to. A purpose is not a tool. A purpose is not a vendor. It is a category, such as analytics or marketing. Each purpose has an id, a display name and a description. The modal lists one row for each purpose.
 
-Purposes live in `iac/consent.json` under `purposes`. The key is the purpose id, which is what you use everywhere else, including in `zaraz_consent_choice()`:
+Purposes live in `iac/consent.json` under `purposes`. The key is the purpose id. Use that id everywhere else, including in `zaraz_consent_choice()`:
 
 ```json
 "purposes": {
@@ -56,25 +56,25 @@ Purposes live in `iac/consent.json` under `purposes`. The key is the purpose id,
 }
 ```
 
-`sync_consent.py` refuses a purpose that is missing a name or a description.
+`sync_consent.py` refuses a purpose that has no name or no description.
 
-Zaraz does not list a purpose that has no tool assigned, so defining purposes alone changes nothing a visitor can see.
+Zaraz does not list a purpose that has no tool assigned. Defining purposes alone changes nothing a visitor can see.
 
 ### 3. Assign tools to purposes, which is the whole mechanism
 
-A tool is gated by its `defaultPurpose` field. This single field is what decides whether consent applies to it.
+The `defaultPurpose` field gates a tool. That one field decides whether consent applies to the tool.
 
 **A tool with no `defaultPurpose` skips consent.** In Cloudflare's words: "When you add a new tool to your website, Zaraz does not assign any purpose to it. This means that this tool will skip consent by default."
 
-That default is why the dangerous state here is quiet rather than loud. Consent enabled over a set of unassigned tools is a switched-on system that gates nothing: the modal appears, a choice is recorded, a cookie is written, and every tool keeps firing exactly as before.
+That default makes the dangerous state quiet. Enable consent over unassigned tools and the system gates nothing. The modal appears. A choice is recorded. A cookie is written. Every tool keeps firing as before.
 
-`iac/tool-purposes.json` maps a tool id to a purpose id and it ships empty:
+`iac/tool-purposes.json` maps a tool id to a purpose id. It ships empty:
 
 ```json
 {}
 ```
 
-That empty default is deliberate, so that a sync never silently attaches Google, Meta or anything else. What is easy to miss is what it means operationally: **a sync run against this file as shipped enables consent and gates nothing.** To gate a tool, add it:
+The empty default is deliberate. It stops a sync from attaching Google, Meta or anything else. The operational meaning is easy to miss. **Run a sync against this file as shipped, and you enable consent and gate nothing.** Add the tool to gate it:
 
 ```json
 {
@@ -82,11 +82,11 @@ That empty default is deliberate, so that a sync never silently attaches Google,
 }
 ```
 
-The tool must already exist in the zone. `sync_consent.py` does not create tools, and it refuses a tool id that is not in the live configuration and a purpose id that is not in `consent.json`.
+The tool must already exist in the zone. `sync_consent.py` does not create tools. It refuses a tool id that the live configuration does not hold. It also refuses a purpose id that `consent.json` does not hold.
 
 ### 4. Enable consent
 
-`consent.enabled` in `iac/consent.json` switches the system on. On its own it does three things and only three: it makes Zaraz draw the modal, it makes Zaraz write the consent cookie, and it makes the plugin's button usable. **It does not gate a single tool.** Gating comes from step 3 and nowhere else.
+`consent.enabled` in `iac/consent.json` switches the system on. On its own it does three things only. Zaraz draws the modal. Zaraz writes the consent cookie. The plugin button becomes usable. **It gates no tool at all.** Step 3 is the only source of gating.
 
 `consent.cookieName` must match what the plugin reads. The default on both sides is `cf_consent`. If the zone uses another name, define `ZARAZ_CONSENT_COOKIE` in `wp-config.php` to the same string as `consent.cookieName`.
 
@@ -98,43 +98,45 @@ cp zaraz-consent.php wp-content/mu-plugins/zaraz-consent.php
 
 There is no activation step and no settings row. WordPress loads `mu-plugins` on its own.
 
-**One more prerequisite that is easy to miss: the plugin emits an inline `<script>`, so it needs a Content Security Policy that allows `unsafe-inline` in `script-src`.** Under a nonce-based policy the script is blocked, the code that un-hides the button never runs, and the button silently disappears. The page renders normally and nothing reports an error. An operator hardening their CSP would remove their own consent withdrawal control and have no signal that it happened. Tracked as #2.
+**One more prerequisite is easy to miss.** The plugin emits an inline `<script>`. It therefore needs a Content Security Policy that allows `unsafe-inline` in `script-src`. A nonce-based policy blocks the script. The code that un-hides the button never runs. The button then disappears without a sign. The page renders normally and reports no error. Harden your policy, and you remove your own consent withdrawal control. Nothing tells you. Tracked as #2.
 
 ## What Zaraz cannot gate
 
-Zaraz gates Zaraz tools. Nothing else is in reach.
+Zaraz gates Zaraz tools. It reaches nothing else.
 
-A script that WordPress, your theme or another plugin enqueues is served from your own origin as part of the page. Zaraz never sees it, no purpose maps to it, and consent has no effect on it.
+WordPress, your theme and other plugins serve their scripts from your own origin. Zaraz never sees those scripts. No purpose maps to them. Consent has no effect on them.
 
-This is not a corner case. On the GGC store, measured 2026-10-23, WooCommerce order attribution and its bundled sourcebuster library run on every page with `allowTracking: true` and no consent check. They write eight `sbjs_*` cookies and capture referrer, UTM parameters, session entry URL, page count, visit count and user agent, which are then posted into the order at checkout. All of it is first-party WordPress, so all of it is outside Zaraz.
+This is not a corner case. The GGC store was measured on 2026-10-23. WooCommerce order attribution and its bundled sourcebuster library run on every page. They run with `allowTracking: true` and no consent check. They write eight `sbjs_*` cookies. They capture referrer, UTM parameters, session entry URL, page count, visit count and user agent. Checkout then posts all of that into the order. Every part of it is first-party WordPress, so Zaraz cannot reach it.
 
-Configure Zaraz consent on that store and you get a modal, a recorded choice and a `cf_consent` cookie, while the tracking above continues unchanged. **That is a consent record without consent, and it is worse than no banner, because it is a compliance claim the code does not keep.**
+Configure Zaraz consent on that store and you get a modal, a recorded choice and a `cf_consent` cookie. The tracking above continues unchanged. **That is a consent record without consent. It is worse than no banner, because the code does not keep the compliance claim.**
 
-Before you adopt this, list every tracker you need to gate and check each one is a Zaraz tool. If some are not, this repo is not sufficient on its own and you need to turn those off, move them into Zaraz, or gate them another way. Measurement for the GGC case is in skyphusion-labs/ggc#49.
+List every tracker you must gate before you adopt this. Check that each one is a Zaraz tool. If some are not, this repo is not enough on its own. Turn those trackers off, move them into Zaraz, or gate them another way. The GGC measurement is in skyphusion-labs/ggc#49.
 
 ## Applying the configuration
 
-`iac/sync_consent.py` is the zone write:
+`iac/sync_consent.py` writes the zone:
 
 ```
 python3 iac/sync_consent.py iac/consent.json iac/tool-purposes.json
 ```
 
-It GETs the live configuration, replaces the `consent` object, sets `defaultPurpose` on the tools named in the map, and PUTs the whole configuration back. It does not create tools. Both requests go to:
+The script GETs the live configuration. It replaces the `consent` object. It sets `defaultPurpose` on the tools named in the map. It then PUTs the whole configuration back. It does not create tools. Both requests go to:
 
 ```
 https://api.cloudflare.com/client/v4/zones/<zone-id>/settings/zaraz/config
 ```
 
-Set `CLOUDFLARE_API_TOKEN` and `ZONE_ID` in the environment. `ZONE_ID` is the 32 character zone id. The token is read from the environment and is never printed.
+Set `CLOUDFLARE_API_TOKEN` and `ZONE_ID` in the environment. `ZONE_ID` is the 32 character zone id. The script reads the token from the environment and never prints it.
 
-The script prints its warning about an empty tool map after the PUT has already happened, so it cannot stop you reaching the state described in step 3. Tracked as #1.
+The script warns about an empty tool map only after the PUT. So the warning cannot stop you reaching the state described in step 3. Tracked as #1.
+
+The script sends the whole configuration back, including `zarazVersion`. Nobody has tested whether the API accepts that field or manages it itself. Testing it needs a live write, so this is unverified.
 
 ### API token permissions
 
-The Zaraz configuration sits behind its own permission group. A token that reads the zone perfectly well is still refused here.
+The Zaraz configuration sits behind its own permission group. A token that reads the zone can still be refused here.
 
-The permission group list on a Cloudflare account contains three Zaraz groups, all of them zone scoped:
+The permission group list on a Cloudflare account holds three Zaraz groups. All three are zone scoped:
 
 | Group | Use | Status |
 |---|---|---|
@@ -142,35 +144,35 @@ The permission group list on a Cloudflare account contains three Zaraz groups, a
 | `Zaraz Edit` | `PUT .../settings/zaraz/config` | named from the permission group list, not verified by a write |
 | `Zaraz Admin` | not needed for a sync | named from the permission group list, not verified by a write |
 
-The list does not say what `Zaraz Admin` grants beyond `Zaraz Edit`, so this file does not guess. A sync reads the configuration and writes it back, so `Zaraz Edit` is the group to reach for and `Zaraz Admin` is wider than the task needs.
+The list does not say what `Zaraz Admin` grants beyond `Zaraz Edit`. This file does not guess. A sync reads the configuration and writes it back. So reach for `Zaraz Edit`. `Zaraz Admin` is wider than the task needs.
 
-**Know the symptom, because it does not look like a scope problem.** Without `Zaraz Read` the GET returns **403** with error code **10000, "Authentication error"**. A wrong path under the same prefix returns 403 as well, so the status alone cannot tell you which you are looking at, and the natural reading is that you typed the URL wrong. Confirmed 2026-10-23: the same token returned 200 on four zones carrying `Zaraz Read` and 403 on four zones without it, while `GET /zones/<zone-id>` returned 200 on all eight.
+**Know the symptom. It does not look like a scope problem.** Without `Zaraz Read` the GET returns **403** with error code **10000, "Authentication error"**. A wrong path under the same prefix also returns 403. The status alone cannot tell the two apart. Most readers conclude they typed the URL wrong. Confirmed 2026-10-23. One token returned 200 on four zones holding `Zaraz Read`. It returned 403 on four zones without it. `GET /zones/<zone-id>` returned 200 on all eight.
 
-That last detail is the trap. **Being able to read the zone proves nothing about being able to read its Zaraz configuration.** Do not use a successful zone read as evidence that your token is scoped correctly; test the Zaraz endpoint itself.
+That last reading is the trap. **A successful zone read proves nothing about Zaraz access.** Do not treat it as evidence that your token is scoped correctly. Test the Zaraz endpoint itself.
 
-Group ids are deliberately left out of this file. An id rots, and a reader will copy one rather than look it up. Read the labels from the permission group list on your own account when you mint the token.
+This file leaves out the group ids on purpose. An id rots, and readers copy one rather than look it up. Read the labels from the permission group list on your own account when you mint the token.
 
-Scope the token to the zones you intend to change and no others.
+Scope the token to the zones you intend to change, and to no others.
 
 ## What the button does
 
-Zaraz shows its own modal on a first visit when consent is enabled and a tool is assigned to a purpose. Later visits do not show it again. The button reopens it.
+Zaraz shows its own modal on a first visit. It does so when consent is enabled and a tool is assigned to a purpose. Later visits do not show the modal again. The button reopens it.
 
-The cart cookie and Cloudflare's security cookies are not Zaraz tools. This file does not gate them.
+The cart cookie and the Cloudflare security cookies are not Zaraz tools. This plugin does not gate them.
 
 `zaraz_consent_choice('analytics')` returns true, false, or null. Null means the visitor has not chosen. The purpose id is the key in the Zaraz config, not the display name.
 
 ## Writing your own text
 
-`companyStreetAddress` in the example is empty. Put an address there only when you have one. The intro HTML is a description of the choice, not a privacy policy. Replace it with the wording you actually use, and point it at your privacy page.
+`companyStreetAddress` in the example is empty. Add an address only when you have one. The intro HTML describes the choice. It is not a privacy policy. Replace it with your own wording, and point it at your privacy page.
 
 ## Not measured
 
 Stated so that nobody reads a silence as a finding.
 
-**The `cf_consent` cookie's lifetime and flags.** Its name and format are known: a JSON object mapping each purpose id to `true`, `false`, or absent. Cloudflare does not document the expiry, `Secure`, `SameSite`, `HttpOnly`, path or domain, and no zone in reach had consent configured, so there was no live cookie to observe. Measure it on your own zone before you write it into a cookie policy.
+**The `cf_consent` cookie lifetime and flags.** The name and format are known. The cookie is a JSON object. It maps each purpose id to `true`, `false`, or absent. Cloudflare does not document the expiry, `Secure`, `SameSite`, `HttpOnly`, path or domain. No zone in reach had consent configured, so there was no live cookie to read. Measure it on your own zone before you write a cookie policy.
 
-**The performance comparison.** The structural claim is verifiable from the code: no banner library, no stylesheet, no external script request, roughly 500 bytes of inline footer markup, and tag execution moved to Cloudflare's edge. `tests/contract.sh` enforces the absence of an enqueue and of any remote URL in the drop-in. There is no before and after measurement against a conventional consent plugin, because neither Zaraz nor this plugin is deployed on a zone where one could be taken.
+**The performance comparison.** The code supports the structural claim. There is no banner library, no stylesheet and no external script request. The footer markup is roughly 500 bytes, inline. Cloudflare runs the tags at the edge. `tests/contract.sh` checks that the plugin adds no enqueue and no remote URL. No before and after measurement exists. Neither Zaraz nor this plugin runs on a zone where someone could take one.
 
 ## Licence
 

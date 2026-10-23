@@ -17,6 +17,14 @@ fi
 if grep -q 'https\?://' "$root/zaraz-consent.php"; then
   fail "the drop-in must not reference a remote URL"
 fi
+# SIMPLIFIED TECHNICAL ENGLISH, measured rather than remembered. This repo is
+# public, and every public project in this estate holds its docs to STE: one
+# idea per sentence, twenty words or fewer. The self-test runs FIRST, because a
+# linter nobody has watched fail reports a clean file for the same reason a
+# broken one does.
+python3 "$root/tests/ste_lint.py" --self-test >/dev/null || fail "ste_lint self-test"
+python3 "$root/tests/ste_lint.py" "$root/README.md" || fail "README prose over 20 words per sentence"
+
 grep -q 'mu-plugins/zaraz-consent.php' "$root/README.md" || fail "install path"
 grep -q 'does not list a purpose' "$root/README.md" || fail "empty purpose note"
 grep -q 'does not create tools' "$root/iac/sync_consent.py" || fail "sync creates nothing"
